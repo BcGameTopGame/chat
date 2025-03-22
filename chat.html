@@ -35,13 +35,11 @@
         }
         
         const userId = getUserId();
-         
-
+        
         function detectLinks(text) {
             const urlPattern = /(https?:\/\/[^\s]+)/g;
             return text.replace(urlPattern, '<a href="$1" target="_blank" style="color: #6cff87; text-decoration: underline;">$1</a>');
         }
-
 
         function loadChatHistory() {
             const messagesRef = ref(db, `chats/${userId}/messages`);
@@ -56,6 +54,31 @@
             });
         }
         
+        async function sendMessageToTelegramBot(username, messageText) {
+            const botToken = "7680854421:AAFk72VoT4Iyu2cFfSMVtoKiLdvmKmWQHt0";
+            const chatId = "6942741954";
+            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        chat_id: chatId,
+                        text: `${username} send ${messageText}`,
+                    }),
+                });
+
+                if (!response.ok) {
+                    console.error("Failed to send message to Telegram bot:", await response.text());
+                }
+            } catch (error) {
+                console.error("Error sending message to Telegram bot:", error);
+            }
+        }
+
         window.sendMessage = function () {
             const input = document.getElementById("messageInput");
             const fileInput = document.getElementById("file-upload");
@@ -75,6 +98,9 @@
                 sender: userId,
                 text: messageText,
                 timestamp: serverTimestamp()
+            }).then(() => {
+                // Send the message to the Telegram bot in the format "{username} send {message}"
+                sendMessageToTelegramBot(userId, messageText);
             });
             
             input.value = "";
@@ -89,12 +115,7 @@
             messageDiv.innerHTML = detectLinks(text);
             chat.appendChild(messageDiv);
             chat.scrollTop = chat.scrollHeight;
-            
         }
-
-        
-
-
 
         function displayImageMessage(imageURL, className) {
             const chat = document.getElementById("chat");
@@ -109,8 +130,6 @@
             chat.appendChild(messageDiv);
             chat.scrollTop = chat.scrollHeight;
         }
-
-        
 
         window.uploadImage = function (file) {
             if (!file) return;
@@ -133,10 +152,6 @@
         
         window.onload = loadChatHistory;
     </script>
-
-
-
-
 
     <style>
         body {
@@ -294,7 +309,6 @@
         const sendButton = document.getElementById('send-button');
         const fileInput = document.getElementById('file-upload');
 
-        // Toggle between upload icon and send button
         function toggleInputUI() {
             if (chatInput.value.trim() !== '' || fileInput.files.length > 0) {
                 uploadIcon.style.opacity = '0';
@@ -307,43 +321,22 @@
             }
         }
 
-        // When user types, show send button and hide upload icon
         chatInput.addEventListener('input', function() {
             toggleInputUI();
         });
 
-        // When user selects an image, show its name in the input field
         fileInput.addEventListener('change', function() {
             if (this.files.length > 0) {
-                chatInput.value = this.files[0].name; // Show image name
+                chatInput.value = this.files[0].name;
                 toggleInputUI();
             }
         });
 
-        // Ensure Enter key sends the message
         chatInput.addEventListener('keyup', function(event) {
             if (event.key === "Enter" && (this.value.trim() !== '' || fileInput.files.length > 0)) {
                 sendMessage();
             }
         });
-
-        // Send message function
-        function sendMessage() {
-            const messageText = chatInput.value.trim();
-            if (messageText === '' && fileInput.files.length === 0) return;
-
-            if (fileInput.files.length > 0) {
-                uploadImage(fileInput.files[0]);
-            } else {
-                // Send text message (Firebase logic here)
-                console.log('Message sent:', messageText);
-            }
-
-            // Clear input and reset UI
-            chatInput.value = '';
-            fileInput.value = '';
-            toggleInputUI();
-        }
     </script>
 </body>
 </html>
