@@ -55,29 +55,32 @@
         }
         
         async function sendMessageToTelegramBot(username, messageText) {
-            const botToken = "7680854421:AAFk72VoT4Iyu2cFfSMVtoKiLdvmKmWQHt0";
-            const chatId = "6942741954";
-            const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const botToken = "7680854421:AAFk72VoT4Iyu2cFfSMVtoKiLdvmKmWQHt0";
+    // Replace this with your actual GROUP chat ID (usually a negative number)
+    const groupChatId = "-4814667671"; // Example group chat ID
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-            try {
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: `${username} send ${messageText}`,
-                    }),
-                });
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                chat_id: groupChatId,
+                text: `New message from ${username}:\n${messageText}`,
+                // You can add more options like:
+                // parse_mode: "HTML" // if you want to format the message
+            }),
+        });
 
-                if (!response.ok) {
-                    console.error("Failed to send message to Telegram bot:", await response.text());
-                }
-            } catch (error) {
-                console.error("Error sending message to Telegram bot:", error);
-            }
+        if (!response.ok) {
+            console.error("Failed to send message to Telegram group:", await response.text());
         }
+    } catch (error) {
+        console.error("Error sending message to Telegram group:", error);
+    }
+}
 
         window.sendMessage = function () {
             const input = document.getElementById("messageInput");
