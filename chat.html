@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -306,40 +307,208 @@
         <button id="send-button" onclick="sendMessage()">&#10148;</button>
     </div>
 
-    <script>
-        const chatInput = document.getElementById('messageInput');
-        const uploadIcon = document.querySelector('.upload-icon');
-        const sendButton = document.getElementById('send-button');
-        const fileInput = document.getElementById('file-upload');
-
-        function toggleInputUI() {
-            if (chatInput.value.trim() !== '' || fileInput.files.length > 0) {
-                uploadIcon.style.opacity = '0';
-                uploadIcon.style.pointerEvents = 'none';
-                sendButton.style.display = 'block';
-            } else {
-                uploadIcon.style.opacity = '1';
-                uploadIcon.style.pointerEvents = 'auto';
-                sendButton.style.display = 'none';
-            }
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+    import { getDatabase, ref, push, set, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-storage.js";
+    
+    const firebaseConfig = {
+        apiKey: "AIzaSyAW4cTAsG2QiXXGvS2FyOwZYbR_BqCQDXM",
+        authDomain: "contactform-37fe3.firebaseapp.com",
+        databaseURL: "https://contactform-37fe3-default-rtdb.firebaseio.com",
+        projectId: "contactform-37fe3",
+        storageBucket: "contactform-37fe3.appspot.com",
+        messagingSenderId: "831163231244",
+        appId: "1:831163231244:web:63e09ac7aadb77b78a9229",
+        measurementId: "G-4R4K8TGVQ1"
+    };
+    
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const storage = getStorage(app);
+    
+    function getUserId() {
+        let userId = localStorage.getItem("chat_user_id");
+        if (!userId) {
+            userId = "user_" + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem("chat_user_id", userId);
+            set(ref(db, `users/${userId}`), { createdAt: serverTimestamp() });
         }
+        return userId;
+    }
+    
+    const userId = getUserId();
+    
+    function detectLinks(text) {
+        const urlPattern = /(https?:\/\/[^\s]+)/g;
+        return text.replace(urlPattern, '<a href="$1" target="_blank" style="color: #6cff87; text-decoration: underline;">$1</a>');
+    }
 
-        chatInput.addEventListener('input', function() {
+    function loadChatHistory() {
+        const messagesRef = ref(db, `chats/${userId}/messages`);
+        
+        onChildAdded(messagesRef, (snapshot) => {
+            const msg = snapshot.val();
+            if (msg.image) {
+                displayImageMessage(msg.image, msg.sender === userId ? "user-message" : "bot-message");
+            } else {
+                displayMessage(msg.text, msg.sender === userId ? "user-message" : "bot-message");
+            }
+        });
+    }
+    
+    async function sendMessageToTelegramBot(username, messageText) {
+        const botToken = "7680854421:AAFk72VoT4Iyu2cFfSMVtoKiLdvmKmWQHt0";
+        const groupChatId = "-4814667671";
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    chat_id: groupChatId,
+                    text: `New message from ${username}:\n${messageText}`,
+                }),
+            });
+
+            if (!response.ok) {
+                console.error("Failed to send message to Telegram group:", await response.text());
+            }
+        } catch (error) {
+            console.error("Error sending message to Telegram group:", error);
+        }
+    }
+
+    function displayMessage(text, className) {
+        const chat = document.getElementById("chat");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${className}`;
+        messageDiv.innerHTML = detectLinks(text);
+        chat.appendChild(messageDiv);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function displayImageMessage(imageURL, className) {
+        const chat = document.getElementById("chat");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${className}`;
+        
+        const img = document.createElement("img");
+        img.src = imageURL;
+        img.style.maxWidth = "200px";
+        
+        messageDiv.appendChild(img);
+        chat.appendChild(messageDiv);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    window.sendMessage = function () {
+        const input = document.getElementById("messageInput");
+        const fileInput = document.getElementById("file-upload");
+        
+        if (fileInput.files.length > 0) {
+            uploadImage(fileInput.files[0]);
+            fileInput.value = "";
+            input.value = "";
             toggleInputUI();
+            return;
+        }
+        
+        const messageText = input.value.trim();
+        if (messageText === "") return;
+        
+        // Send user message
+        push(ref(db, `chats/${userId}/messages`), {
+            sender: userId,
+            text: messageText,
+            timestamp: serverTimestamp()
+        }).then(() => {
+            sendMessageToTelegramBot(userId, messageText);
+            
+            // Send Telegram link response
+            setTimeout(() => {
+                const telegramLink = "Contact us on Telegram: https://t.me/BCGame_AIIen";
+                push(ref(db, `chats/${userId}/messages`), {
+                    sender: "bot",
+                    text: telegramLink,
+                    timestamp: serverTimestamp()
+                });
+            }, 800);
         });
+        
+        input.value = "";
+        toggleInputUI();
+    };
 
-        fileInput.addEventListener('change', function() {
-            if (this.files.length > 0) {
-                chatInput.value = this.files[0].name;
-                toggleInputUI();
-            }
+    window.uploadImage = function (file) {
+        if (!file) return;
+        
+        const filePath = `chat_images/${userId}/${file.name}`;
+        const imgRef = storageRef(storage, filePath);
+        const uploadTask = uploadBytesResumable(imgRef, file);
+        
+        uploadTask.on("state_changed", null, console.error, async () => {
+            const imageUrl = await getDownloadURL(uploadTask.snapshot.ref);
+            displayImageMessage(imageUrl, "user-message");
+            
+            push(ref(db, `chats/${userId}/messages`), {
+                sender: userId,
+                image: imageUrl,
+                timestamp: serverTimestamp()
+            }).then(() => {
+                // Send Telegram link response after image
+                setTimeout(() => {
+                    const telegramLink = "Contact us on Telegram: https://t.me/BCGame_AIIen";
+                    push(ref(db, `chats/${userId}/messages`), {
+                        sender: "bot",
+                        text: telegramLink,
+                        timestamp: serverTimestamp()
+                    });
+                }, 800);
+            });
         });
+    };
 
-        chatInput.addEventListener('keyup', function(event) {
-            if (event.key === "Enter" && (this.value.trim() !== '' || fileInput.files.length > 0)) {
-                sendMessage();
-            }
-        });
-    </script>
+    // Your existing UI handling code
+    const chatInput = document.getElementById('messageInput');
+    const uploadIcon = document.querySelector('.upload-icon');
+    const sendButton = document.getElementById('send-button');
+    const fileInput = document.getElementById('file-upload');
+
+    function toggleInputUI() {
+        if (chatInput.value.trim() !== '' || fileInput.files.length > 0) {
+            uploadIcon.style.opacity = '0';
+            uploadIcon.style.pointerEvents = 'none';
+            sendButton.style.display = 'block';
+        } else {
+            uploadIcon.style.opacity = '1';
+            uploadIcon.style.pointerEvents = 'auto';
+            sendButton.style.display = 'none';
+        }
+    }
+
+    chatInput.addEventListener('input', function() {
+        toggleInputUI();
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            chatInput.value = this.files[0].name;
+            toggleInputUI();
+        }
+    });
+
+    chatInput.addEventListener('keyup', function(event) {
+        if (event.key === "Enter" && (this.value.trim() !== '' || fileInput.files.length > 0)) {
+            sendMessage();
+        }
+    });
+
+    // Initialize chat
+    window.onload = loadChatHistory;
+</script>
 </body>
 </html>
